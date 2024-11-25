@@ -1,0 +1,207 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(BrickGameApp());
+}
+
+class BrickGameApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Brick Game',
+      home: BrickGameScreen(),
+    );
+  }
+}
+
+class BrickGameScreen extends StatefulWidget {
+  @override
+  _BrickGameScreenState createState() => _BrickGameScreenState();
+}
+
+class _BrickGameScreenState extends State<BrickGameScreen> with SingleTickerProviderStateMixin {
+  // Game-related variables
+  late AnimationController _controller;
+  late double paddleX;
+  late double ballX, ballY;
+  late double ballDX, ballDY;
+  late int score;
+  late List<Rect> bricks;
+  late bool isGameOver;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize values
+    paddleX = 150;
+    ballX = 150;
+    ballY = 300;
+    ballDX = 2;
+    ballDY = -2;
+    score = 0;
+    isGameOver = false;
+
+    // Define bricks
+    bricks = [];
+    for (int i = 0; i < 5; i++) {
+      for (int j = 0; j < 6; j++) {
+        bricks.add(Rect.fromLTWH(j * 60.0 + 10.0, i * 30.0 + 50.0, 50.0, 20.0));
+      }
+    }
+
+    // Set up animation controller
+    _controller = AnimationController(vsync: this, duration: Duration(milliseconds: 16))
+      ..addListener(_gameLoop)
+      ..repeat();
+  }
+
+  // Game loop function
+  void _gameLoop() {
+    if (isGameOver) {
+      _controller.stop();
+      return;
+    }
+
+    setState(() {
+      // Update ball position
+      ballX += ballDX;
+      ballY += ballDY;
+
+      // Ball collision with walls
+      if (ballX <= 0 || ballX >= 400) ballDX = -ballDX;  // Left or right wall
+      if (ballY <= 0) ballDY = -ballDY;  // Top wall
+      if (ballY >= 600) {
+        isGameOver = true;  // Game Over condition (bottom of the screen)
+      }
+
+      // Ball collision with paddle
+      if (ballY >= 550 && ballX >= paddleX && ballX <= paddleX + 100) {
+        ballDY = -ballDY;
+      }
+
+      // Ball collision with bricks
+      for (int i = 0; i < bricks.length; i++) {
+        Rect brick = bricks[i];
+        if (brick.contains(Offset(ballX, ballY))) {
+          bricks.removeAt(i);
+          ballDY = -ballDY;
+          score += 10;  // Increase score for breaking a brick
+          break;
+        }
+      }
+    });
+  }
+
+  // Handle paddle movement with touch input
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      paddleX += details.primaryDelta!;
+      paddleX = paddleX.clamp(0.0, 300.0);  // Prevent paddle from going out of bounds
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Brick Game'),
+      ),
+      body: GestureDetector(
+        onHorizontalDragUpdate: _onHorizontalDragUpdate,
+        child: Stack(
+          children: [
+            CustomPaint(
+              size: Size(400, 600),
+              painter: BrickGamePainter(
+                paddleX: paddleX,
+                ballX: ballX,
+                ballY: ballY,
+                bricks: bricks,
+                score: score,
+                isGameOver: isGameOver,
+              ),
+            ),
+            if (isGameOver)
+              Center(
+                child: Text(
+                  'Game Over\nScore: $score',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 24, color: Colors.red),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class BrickGamePainter extends CustomPainter {
+  final double paddleX;
+  final double ballX, ballY;
+  final List<Rect> bricks;
+  final int score;
+  final bool isGameOver;
+
+  BrickGamePainter({
+    required this.paddleX,
+    required this.ballX,
+    required this.ballY,
+    required this.bricks,
+    required this.score,
+    required this.isGameOver,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+
+    // Set the background color to purple
+    paint.color = Colors.purple;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+
+    // Draw bricks
+    paint.color = Colors.blue;
+    for (var brick in bricks) {
+      canvas.drawRect(brick, paint);
+    }
+
+    // Draw paddle
+    paint.color = Colors.green;
+    canvas.drawRect(Rect.fromLTWH(paddleX, size.height - 50, 100, 20), paint);
+
+    // Draw ball
+    paint.color = Color.fromARGB(255, 255, 255, 255);
+    canvas.drawCircle(Offset(ballX, ballY), 10, paint);
+
+    // Draw score
+    final textPainter = TextPainter(
+      text: TextSpan(text: 'Score: $score', style: TextStyle(color: Colors.white, fontSize: 20)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(canvas, Offset(10, 10));
+
+    // Draw Game Over message
+    if (isGameOver) {
+      final gameOverPainter = TextPainter(
+        text: TextSpan(text: 'Game Over', style: TextStyle(color: Colors.red, fontSize: 32)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      gameOverPainter.paint(canvas, Offset(size.width / 2 - 100, size.height / 2 - 50));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return true;
+  }
+}
